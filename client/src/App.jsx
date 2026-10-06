@@ -27,7 +27,8 @@ function App() {
   const checkAvailability = async () => {
   try {
     const response = await fetch(
-      `https://YOUR-RENDER-BACKEND.onrender.com/api/tables/available?date=${formData.date}&time=${formData.time}&guests=${formData.guests}`
+      `https://restaurant-booking-server-a5ez.onrender.com/api/tables/available?date=${formData.date}&time=${formData.time}&guests=${formData.guests}`
+
     );
 
     const data = await response.json();
@@ -51,7 +52,7 @@ function App() {
     }
 
     try {
-      const response = await fetch("https://YOUR-RENDER-BACKEND.onrender.com/api/bookings", {
+      const response = await fetch(  "https://restaurant-booking-server-a5ez.onrender.com/api/bookings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
