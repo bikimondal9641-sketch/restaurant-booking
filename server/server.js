@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const bookingRoutes = require("./routes/bookingRoutes");
 const tableRoutes = require("./routes/tableRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.json());
 
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/tables", tableRoutes);
+app.use("/api/auth", authRoutes);
 
 mongoose
   .connect(process.env.MONGO_URI)

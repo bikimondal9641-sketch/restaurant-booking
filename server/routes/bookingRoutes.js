@@ -1,32 +1,53 @@
+
 const express = require("express");
 const Booking = require("../models/Booking");
 const Table = require("../models/Table");
 
+const {
+  protect,
+  customerOnly,
+} = require("../middleware/authMiddleware");
+
 const router = express.Router();
 
-// Create a new booking
-router.post("/", async (req, res) => {
+// CREATE BOOKING - Logged-in customers only
+router.post("/", protect, customerOnly, async (req, res) => {
   try {
     const { name, phone, date, time, guests, tableId } = req.body;
+    const guestCount = Number(guests);
 
-    // Find tables that can accommodate the number of guests
-    const suitableTables = await Table.find({
-      capacity: { $gte: Number(guests) },
-      status: "available",
-    }).sort({ capacity: 1 });
+    // Validate required fields
+    if (
+      !name ||
+      !phone ||
+      !date ||
+      !time ||
+      !tableId ||
+      !Number.isInteger(guestCount) ||
+      guestCount < 1
+    ) {
+      return res.status(400).json({
+        message: "Please provide all booking details correctly.",
+      });
+    }
 
-    // Find bookings for the same date and time
-    const existingBookings = await Booking.find({
-      date: date,
-      time: time,
-    });
+    // Validate hourly booking time
+    if (!/^(?:[01]\d|2[0-2]):00$/.test(time)) {
+      return res.status(400).json({
+        message: "Choose a booking time on the hour, from 00:00 to 22:00.",
+      });
+    }
 
-    // Get IDs of tables already booked for this slot
-    const bookedTableIds = existingBookings
-      .filter((booking) => booking.table)
-      .map((booking) => booking.table.toString());
+    // Calculate booking end time (60 minutes)
+    const [hours, minutes] = time.split(":").map(Number);
+    const endDate = new Date(2000, 0, 1, hours, minutes + 60);
 
-    // Check whether the selected table exists
+    const endTime =
+      String(endDate.getHours()).padStart(2, "0") +
+      ":" +
+      String(endDate.getMinutes()).padStart(2, "0");
+
+    // Find selected table
     const selectedTable = await Table.findById(tableId);
 
     if (!selectedTable) {
@@ -36,34 +57,45 @@ router.post("/", async (req, res) => {
     }
 
     // Check table capacity
-    if (selectedTable.capacity < Number(guests)) {
+    if (selectedTable.capacity < guestCount) {
       return res.status(400).json({
-        message: "Selected table cannot accommodate this number of guests.",
+        message: "Selected table cannot accommodate these guests.",
       });
     }
 
-    // Check whether the selected table is physically available
+    // Check table status
     if (selectedTable.status !== "available") {
       return res.status(400).json({
         message: "Selected table is unavailable.",
       });
     }
 
-    // Check whether the selected table is already booked
-    if (bookedTableIds.includes(selectedTable._id.toString())) {
+    // Check overlapping bookings
+    const overlappingBookings = await Booking.find({
+      date,
+      table: selectedTable._id,
+      time: { $lt: endTime },
+      endTime: { $gt: time },
+    });
+
+    if (overlappingBookings.length > 0) {
       return res.status(400).json({
-        message: "Selected table is already booked for this date and time.",
+        message: "This table is already booked for that time slot.",
       });
     }
 
-    // Create booking with assigned table
+    // Create booking linked to the logged-in customer
     const booking = new Booking({
       name,
       phone,
       date,
       time,
-      guests,
+      endTime,
+      guests: guestCount,
       table: selectedTable._id,
+
+      // Get customer ID from verified JWT token
+      user: req.user.userId,
     });
 
     const savedBooking = await booking.save();
@@ -73,10 +105,32 @@ router.post("/", async (req, res) => {
       booking: savedBooking,
       assignedTable: selectedTable.tableNumber,
     });
+
   } catch (error) {
+    console.error("Booking creation error:", error);
+
     res.status(500).json({
-      message: "Failed to create booking",
-      error: error.message,
+      message: "Failed to create booking.",
+    });
+  }
+});
+
+
+ // GET BOOKINGS OF THE LOGGED-IN CUSTOMER
+router.get("/my", protect, customerOnly, async (req, res) => {
+  try {
+    const bookings = await Booking.find({
+      user: req.user.userId,
+    })
+      .populate("table", "tableNumber capacity")
+      .sort({ date: -1, time: -1 });
+
+    res.status(200).json(bookings);
+  } catch (error) {
+    console.error("Fetch customer bookings error:", error);
+
+    res.status(500).json({
+      message: "Failed to retrieve your bookings.",
     });
   }
 });
