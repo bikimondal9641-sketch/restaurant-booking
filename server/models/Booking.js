@@ -34,6 +34,11 @@ const bookingSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    status: {
+      type: String,
+      enum: ["confirmed", "cancelled"],
+      default: "confirmed",
+    },
 
     table: {
       type: mongoose.Schema.Types.ObjectId,

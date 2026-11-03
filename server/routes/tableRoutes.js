@@ -87,6 +87,7 @@ router.get("/available", async (req, res) => {
     // Find bookings that overlap the requested 60-minute slot
     const bookings = await Booking.find({
       date,
+      status: { $ne: "cancelled" },
       time: { $lt: endTime },
       endTime: { $gt: time },
     });

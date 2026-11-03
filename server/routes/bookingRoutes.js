@@ -73,6 +73,7 @@ router.post("/", protect, customerOnly, async (req, res) => {
     // Check overlapping bookings
     const overlappingBookings = await Booking.find({
       date,
+      status: { $ne: "cancelled" },
       table: selectedTable._id,
       time: { $lt: endTime },
       endTime: { $gt: time },
@@ -134,5 +135,50 @@ router.get("/my", protect, customerOnly, async (req, res) => {
     });
   }
 });
+
+// CANCEL A CUSTOMER'S OWN BOOKING
+router.patch("/:id/cancel", protect, customerOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+      return res.status(400).json({
+        message: "Invalid booking ID.",
+      });
+    }
+
+    const booking = await Booking.findOne({
+      _id: id,
+      user: req.user.userId,
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found or you are not authorized to cancel it.",
+      });
+    }
+
+    if (booking.status === "cancelled") {
+      return res.status(400).json({
+        message: "This booking has already been cancelled.",
+      });
+    }
+
+    booking.status = "cancelled";
+    await booking.save();
+
+    return res.status(200).json({
+      message: "Booking cancelled successfully.",
+      booking,
+    });
+  } catch (error) {
+    console.error("Booking cancellation error:", error);
+
+    return res.status(500).json({
+      message: "Failed to cancel booking.",
+    });
+  }
+});
+
 
 module.exports = router;
